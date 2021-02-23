@@ -5,8 +5,11 @@
   <!-- Configurations that affect the Test Framework -->
   <RunConfiguration>
     <!-- Path is relative to location of this .runsettings file -->
-    <ResultsDirectory>..\..\TestResults\x64</ResultsDirectory>
+      <!--<EnvironmentVariables>
+          <MicrosoftInstrumentationEngine_DebugWait>1</MicrosoftInstrumentationEngine_DebugWait>
+      </EnvironmentVariables>-->
 
+      <ResultsDirectory>..\..\TestResults\x64</ResultsDirectory>
     <!-- [x86] | x64
       - You can also change it from menu Test, Test Settings, Default Processor Architecture -->
     <TargetPlatform>x64</TargetPlatform>

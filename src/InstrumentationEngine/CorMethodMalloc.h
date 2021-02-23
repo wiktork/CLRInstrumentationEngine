@@ -43,5 +43,7 @@ namespace MicrosoftInstrumentationEngine
         // Called by CCorProfilerInfoWrapper to obtain the last allocation and validate the buffer
         // NOTE: Relies on the serialization of jit callbacks for thread safety.
         HRESULT GetCurrentBufferAndLen(_Out_ BYTE** ppBuffer, _Out_ ULONG* pcbBufferLen);
+
+        HRESULT DetachCurrentBuffer();
     };
 }
