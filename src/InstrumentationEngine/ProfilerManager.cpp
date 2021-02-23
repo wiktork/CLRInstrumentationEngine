@@ -1964,8 +1964,12 @@ HRESULT CProfilerManager::JITCompilationFinished(
 
     PROF_CALLBACK_BEGIN
 
+    CCriticalSectionHolder holder(&m_csForJIT);
+
     CComPtr<CMethodInfo> pMethodInfo;
     hr = CreateMethodInfo(functionId, &pMethodInfo);
+
+    CCleanupMethodInfo cleanupMethodInfo(pMethodInfo);
     CComBSTR name;
     if (SUCCEEDED(pMethodInfo->GetFullName(&name)))
     {

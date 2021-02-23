@@ -37,7 +37,8 @@ HRESULT MicrosoftInstrumentationEngine::CCorProfilerFunctionInfoWrapper::SetILFu
     HRESULT hr = S_OK;
     CLogging::LogMessage(_T("Starting CCorProfilerFunctionInfoWrapper::SetILFunctionBody"));
 
-    IfFailRet(m_pMethodInfo->SetFinalRenderedFunctionBody(pbNewILMethodHeader, cbNewILMethodHeader));
+    //Do we need the intermediate buffer for rejit?
+    IfFailRet(m_pMethodInfo->SetFinalRenderedFunctionBody(pbNewILMethodHeader, cbNewILMethodHeader, FALSE));
 
     CLogging::LogMessage(_T("End CCorProfilerFunctionInfoWrapper::SetILFunctionBody"));
 

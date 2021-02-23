@@ -381,6 +381,11 @@ public:
     }
 
     virtual ~CCoRawProfilerHook() {};
+
+private:
+
+    ATL::CComPtr<ICorProfilerInfo5> m_pRealProfilerInfo;
+
 };
 
 OBJECT_ENTRY_AUTO(CLSID_CoRawProfilerHook, CCoRawProfilerHook);

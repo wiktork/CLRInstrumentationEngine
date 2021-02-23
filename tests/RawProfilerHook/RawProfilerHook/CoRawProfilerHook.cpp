@@ -11,7 +11,6 @@ HRESULT STDMETHODCALLTYPE CCoRawProfilerHook::Initialize(
 {
     ::SetEnvironmentVariable(L"CCoRawProfilerHook::Initialize", L"S_OK");
 
-    ATL::CComPtr<ICorProfilerInfo5> m_pRealProfilerInfo;
     pICorProfilerInfoUnk->QueryInterface(__uuidof(ICorProfilerInfo5), (LPVOID*)&m_pRealProfilerInfo);
     m_pRealProfilerInfo->SetEventMask2(0, COR_PRF_HIGH_ADD_ASSEMBLY_REFERENCES);
 
@@ -122,6 +121,13 @@ HRESULT STDMETHODCALLTYPE CCoRawProfilerHook::FunctionUnloadStarted(
 HRESULT STDMETHODCALLTYPE CCoRawProfilerHook::JITCompilationStarted(
     /* [in] */ FunctionID functionId,
     /* [in] */ BOOL fIsSafeToBlock){
+
+
+    ClassID classId;
+    ModuleID moduleId;
+    mdToken token;
+    m_pRealProfilerInfo->GetFunctionInfo(functionId, &classId, &moduleId, &token);
+
     return S_OK;
 }
 

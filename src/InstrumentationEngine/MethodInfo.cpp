@@ -46,7 +46,8 @@ MicrosoftInstrumentationEngine::CMethodInfo::CMethodInfo(
     m_bGenericParametersInitialized(false),
     m_bIsCreateBaselineEnabled(true),
     m_bIsHeaderInitialized(false),
-    m_bIsRejit(false)
+    m_bIsRejit(false),
+    m_userDefinedBuffer(nullptr)
 {
     DEFINE_REFCOUNT_NAME(CMethodInfo);
 
@@ -1289,7 +1290,8 @@ HRESULT MicrosoftInstrumentationEngine::CMethodInfo::GetIntermediateRenderedFunc
 // Called by the profiler info wrapper when a raw callback sets a function's il
 HRESULT MicrosoftInstrumentationEngine::CMethodInfo::SetFinalRenderedFunctionBody(
     _In_ LPCBYTE pMethodHeader,
-    _In_ ULONG cbMethodSize
+    _In_ ULONG cbMethodSize,
+    _In_ BOOL userAddress
     )
 {
     HRESULT hr = S_OK;
@@ -1297,17 +1299,24 @@ HRESULT MicrosoftInstrumentationEngine::CMethodInfo::SetFinalRenderedFunctionBod
     CLogging::LogMessage(_T("Start CMethodInfo::SetFinalRenderedFunctionBody"));
     IfNullRetPointer(pMethodHeader);
 
+    //TODO should we commit this after we actually allocate?
     m_bIsInstrumented = true;
-
-    if (m_pFinalRenderedMethod != nullptr)
-    {
-        CLogging::LogError(_T("CMethodInfo::SetFinalRenderedFunctionBody - final method body should only be called once."));
-        return E_FAIL;
-    }
-
     m_pModuleInfo->SetMethodIsTransformed(m_tkFunction, true);
-    m_pFinalRenderedMethod.Allocate(cbMethodSize);
-    IfFailRetErrno(memcpy_s(m_pFinalRenderedMethod, cbMethodSize, pMethodHeader, cbMethodSize));
+
+    if (!userAddress)
+    {
+        if (m_pFinalRenderedMethod != nullptr)
+        {
+            CLogging::LogError(_T("CMethodInfo::SetFinalRenderedFunctionBody - final method body should only be called once."));
+            return E_FAIL;
+        }
+        m_pFinalRenderedMethod.Allocate(cbMethodSize);
+        IfFailRetErrno(memcpy_s(m_pFinalRenderedMethod, cbMethodSize, pMethodHeader, cbMethodSize));
+    }
+    else
+    {
+        m_userDefinedBuffer = pMethodHeader;
+    }
 
     m_cbFinalRenderedMethod = cbMethodSize;
 
@@ -1338,19 +1347,31 @@ HRESULT MicrosoftInstrumentationEngine::CMethodInfo::ApplyFinalInstrumentation()
         ModuleID moduleId;
         IfFailRet(m_pModuleInfo->GetModuleID(&moduleId));
 
-        CComPtr<IMethodMalloc> pMalloc;
-        IfFailRet(pCorProfilerInfo->GetILFunctionBodyAllocator(moduleId, &pMalloc));
 
         DWORD cbMethodBody = 0;
-        BYTE* pMethodBody = nullptr;
+        LPCBYTE pMethodBody = nullptr;
         IfFailRet(GetFinalInstrumentation(&cbMethodBody, &pMethodBody));
 
-        PVOID pFunction = pMalloc->Alloc(cbMethodBody);
-        IfFailRetErrno(memcpy_s(pFunction, cbMethodBody, pMethodBody, cbMethodBody));
+        LPCBYTE pFunction = nullptr;
+
+        if (m_userDefinedBuffer == nullptr)
+        {
+            CComPtr<IMethodMalloc> pMalloc;
+            IfFailRet(pCorProfilerInfo->GetILFunctionBodyAllocator(moduleId, &pMalloc));
+
+            PVOID memory = pMalloc->Alloc(cbMethodBody);
+            IfFailRetErrno(memcpy_s(memory, cbMethodBody, pMethodBody, cbMethodBody));
+            pFunction = (LPCBYTE)memory;
+        }
+        else
+        {
+            //No copy operation is needed.
+            pFunction = pMethodBody;
+        }
 
         LogMethodInfo();
 
-        IfFailRet(pCorProfilerInfo->SetILFunctionBody(moduleId, m_tkFunction, (LPCBYTE)pFunction));
+        IfFailRet(pCorProfilerInfo->SetILFunctionBody(moduleId, m_tkFunction, pFunction));
 
         m_pModuleInfo->SetMethodIsTransformed(m_tkFunction, true);
 
@@ -1373,7 +1394,7 @@ HRESULT MicrosoftInstrumentationEngine::CMethodInfo::ApplyFinalInstrumentation()
         LogMethodInfo();
 
         DWORD cbMethodBody = 0;
-        BYTE* pMethodBody = nullptr;
+        LPCBYTE pMethodBody = nullptr;
         IfFailRet(GetFinalInstrumentation(&cbMethodBody, &pMethodBody));
 
         IfFailRet(m_pFunctionControl->SetILFunctionBody(cbMethodBody, pMethodBody));
@@ -1879,13 +1900,13 @@ tstring MicrosoftInstrumentationEngine::CMethodInfo::GetCorElementTypeString(_In
 // NOTE: a seperate buffer is needed because the clr requires a callee destroyed buffer in the rejit cases, and
 // some hosts, including MMA, will try to consume the buffer after the set to calculate the cor il map.
 // using the same buffer on set would invalidate the pointer that such hosts already obtained.
-HRESULT MicrosoftInstrumentationEngine::CMethodInfo::GetFinalInstrumentation(_Out_ DWORD* pcbMethodBody, _Out_ BYTE** ppMethodBody)
+HRESULT MicrosoftInstrumentationEngine::CMethodInfo::GetFinalInstrumentation(_Out_ DWORD* pcbMethodBody, _Out_ LPCBYTE* ppMethodBody)
 {
     HRESULT hr = S_OK;
     IfNullRet(pcbMethodBody);
     IfNullRet(ppMethodBody);
 
-    if (m_pFinalRenderedMethod == nullptr)
+    if ((m_pFinalRenderedMethod == nullptr) && (m_userDefinedBuffer == nullptr))
     {
         // raw profiler did not instrument the method. Use the intermediate rendered method
         // from the instrumentation methods.
@@ -1896,7 +1917,7 @@ HRESULT MicrosoftInstrumentationEngine::CMethodInfo::GetFinalInstrumentation(_Ou
     {
         // raw profiler did instrument the method. Use the final rendered method
         *pcbMethodBody = m_cbFinalRenderedMethod;
-        *ppMethodBody = m_pFinalRenderedMethod;
+        *ppMethodBody = (m_pFinalRenderedMethod != nullptr) ? m_pFinalRenderedMethod : m_userDefinedBuffer;
     }
 
     return S_OK;
@@ -1990,7 +2011,7 @@ HRESULT MicrosoftInstrumentationEngine::CMethodInfo::GetInstrumentationResults(
     HRESULT hr = S_OK;
 
     DWORD cbMethodBody = 0;
-    BYTE* pbMethodBody = nullptr;
+    LPCBYTE pbMethodBody = nullptr;
     IfFailRet(GetFinalInstrumentation(&cbMethodBody, &pbMethodBody));
 
     IMAGE_COR_ILMETHOD* pMethodHeader = (IMAGE_COR_ILMETHOD*)(pbMethodBody);

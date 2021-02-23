@@ -104,6 +104,12 @@ namespace MicrosoftInstrumentationEngine
         // NOTE: a seperate copy is needed because the clr requires a callee destroyed buffer in the rejit cases, and
         // some hosts, including MMA, will try to consume the buffer after the set to calculate the cor il map.
         CAutoVectorPtr<BYTE> m_pFinalRenderedMethod;
+
+        //There are raw profiler hook situations where we will not be in control of the buffer passed to SetILFunctionBody:
+        // - The user allocates the buffer, skipping GetILFunctionBodyAllocator (in newer runtimes, RVA's do not have any specific memory location requirements)
+        // - Raw profiler hook calls SetILFunctionBody right after DefineMethod, where we will not have the opportunity to cache the method token
+        LPCBYTE m_userDefinedBuffer;
+
         DWORD m_cbFinalRenderedMethod;
 
         // Set to true if any client has instrumented the method.
@@ -173,7 +179,8 @@ namespace MicrosoftInstrumentationEngine
         // status of this method to true.
         HRESULT SetFinalRenderedFunctionBody(
             _In_ LPCBYTE pMethodHeader,
-            _In_ ULONG cbMethodSize
+            _In_ ULONG cbMethodSize,
+            _In_ BOOL userBuffer
             );
 
          bool IsInstrumented() const
@@ -280,7 +287,7 @@ namespace MicrosoftInstrumentationEngine
         HRESULT InitializeInstructionsAndExceptions();
         HRESULT InitializeGenericParameters(mdToken tkFunction);
 
-        HRESULT GetFinalInstrumentation(_Out_ DWORD* pcbMethodBody, _Out_ BYTE** ppMethodBody);
+        HRESULT GetFinalInstrumentation(_Out_ DWORD* pcbMethodBody, _Out_ LPCBYTE* ppMethodBody);
 
         HRESULT InitializeFullName();
 

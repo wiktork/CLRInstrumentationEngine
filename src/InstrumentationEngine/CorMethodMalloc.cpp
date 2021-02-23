@@ -13,6 +13,7 @@ MicrosoftInstrumentationEngine::CCorMethodMalloc::CCorMethodMalloc() : m_cbBuffe
 
 PVOID MicrosoftInstrumentationEngine::CCorMethodMalloc::Alloc(_In_ ULONG cb)
 {
+    //TODO Any consecutive calls to Alloc will destroy the previous buffer...
     m_pBuffer.Free();
 
     m_pBuffer.Allocate(cb);
@@ -33,5 +34,11 @@ HRESULT MicrosoftInstrumentationEngine::CCorMethodMalloc::GetCurrentBufferAndLen
     *ppBuffer = m_pBuffer.m_p;
     *pcbBufferLen = m_cbBufferLen;
 
+    return S_OK;
+}
+
+HRESULT MicrosoftInstrumentationEngine::CCorMethodMalloc::DetachCurrentBuffer()
+{
+    m_pBuffer.Detach();
     return S_OK;
 }
